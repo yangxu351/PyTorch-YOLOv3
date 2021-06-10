@@ -1,0 +1,1 @@
+python train.py --cmt 'syn_wdt_BlueSky_rnd_solar_rnd_cam_step100' 

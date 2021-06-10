@@ -5,6 +5,7 @@ from __future__ import division
 import os
 import argparse
 import tqdm
+export CUDA_VISIBLE_DEVICES='0'
 
 import torch
 from torch.utils.data import DataLoader
@@ -57,40 +58,23 @@ def _create_data_loader(img_path, batch_size, img_size, n_cpu, multiscale_traini
     return dataloader
 
 
-def run():
-    print_environment_info()
-    parser = argparse.ArgumentParser(description="Trains the YOLO model.")
-    parser.add_argument("-m", "--model", type=str, default="config/yolov3.cfg", help="Path to model definition file (.cfg)")
-    parser.add_argument("-d", "--data", type=str, default="config/coco.data", help="Path to data config file (.data)")
-    parser.add_argument("-e", "--epochs", type=int, default=300, help="Number of epochs")
-    parser.add_argument("-v", "--verbose", action='store_true', help="Makes the training more verbose")
-    parser.add_argument("--n_cpu", type=int, default=8, help="Number of cpu threads to use during batch generation")
-    parser.add_argument("--pretrained_weights", type=str, help="Path to checkpoint file (.weights or .pth). Starts training from checkpoint model")
-    parser.add_argument("--checkpoint_interval", type=int, default=1, help="Interval of epochs between saving model weights")
-    parser.add_argument("--evaluation_interval", type=int, default=1, help="Interval of epochs between evaluations on validation set")
-    parser.add_argument("--multiscale_training", action="store_false", help="Allow for multi-scale training")
-    parser.add_argument("--iou_thres", type=float, default=0.5, help="Evaluation: IOU threshold required to qualify as detected")
-    parser.add_argument("--conf_thres", type=float, default=0.1, help="Evaluation: Object confidence threshold")
-    parser.add_argument("--nms_thres", type=float, default=0.5, help="Evaluation: IOU threshold for non-maximum suppression")
-    parser.add_argument("--logdir", type=str, default="logs", help="Directory for training log files (e.g. for TensorBoard)")
-    parser.add_argument("--seed", type=int, default=-1, help="Makes results reproducable. Set -1 to disable.")
-    args = parser.parse_args()
-    print(f"Command line arguments: {args}")
-
+def run(args):
     if args.seed != -1:
         provide_determinism(args.seed)
 
+    os.makedirs(args.logdir, exist_ok=True)
     logger = Logger(args.logdir)  # Tensorboard logger
 
     # Create output directories if missing
-    os.makedirs("output", exist_ok=True)
-    os.makedirs("checkpoints", exist_ok=True)
+    os.makedirs(args.output_dir, exist_ok=True)
+    os.makedirs(args.checkpoint_dir, exist_ok=True)
 
     # Get data configuration
     data_config = parse_data_config(args.data)
     train_path = data_config["train"]
     valid_path = data_config["valid"]
     class_names = load_classes(data_config["names"])
+    # os.environ['CUDA_VISIBLE_DEVICES'] = device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # ############
@@ -220,7 +204,7 @@ def run():
 
         # Save model to checkpoint file
         if epoch % args.checkpoint_interval == 0:
-            checkpoint_path = f"checkpoints/yolov3_ckpt_{epoch}.pth"
+            checkpoint_path = f"{args.checkpoint_dir}/yolov3_ckpt_{epoch}.pth"
             print(f"---- Saving checkpoint to: '{checkpoint_path}' ----")
             torch.save(model.state_dict(), checkpoint_path)
 
@@ -253,4 +237,33 @@ def run():
 
 
 if __name__ == "__main__":
-    run()
+    print_environment_info()
+    parser = argparse.ArgumentParser(description="Trains the YOLO model.")
+    parser.add_argument("-c", "--cmt", type=str, default="", help="comment of data folder", required=True)
+    parser.add_argument("--dataseed", type=int, default=17, help="data sampling seed")
+    parser.add_argument("-m", "--model", type=str, default="config/yolov3-xilin-wdt.cfg", help="Path to model definition file (.cfg)")
+    parser.add_argument("-d", "--data", type=str, default="data_wdt/{}/{}.data", help="Path to data config file (.data)")
+    parser.add_argument("-e", "--epochs", type=int, default=110, help="Number of epochs")
+    parser.add_argument("-v", "--verbose", action='store_true', help="Makes the training more verbose")
+    parser.add_argument("--n_cpu", type=int, default=8, help="Number of cpu threads to use during batch generation")
+    parser.add_argument("--pretrained_weights", type=str, help="Path to checkpoint file (.weights or .pth). Starts training from checkpoint model")
+    parser.add_argument("--checkpoint_interval", type=int, default=20, help="Interval of epochs between saving model weights")
+    parser.add_argument("--evaluation_interval", type=int, default=20, help="Interval of epochs between evaluations on validation set")
+    parser.add_argument("--multiscale_training", action="store_false", help="Allow for multi-scale training")
+    parser.add_argument("--iou_thres", type=float, default=0.5, help="Evaluation: IOU threshold required to qualify as detected")
+    parser.add_argument("--conf_thres", type=float, default=0.1, help="Evaluation: Object confidence threshold")
+    parser.add_argument("--nms_thres", type=float, default=0.5, help="Evaluation: IOU threshold for non-maximum suppression")
+    parser.add_argument("--logdir", type=str, default="logs/{}", help="Directory for training log files (e.g. for TensorBoard)")
+    parser.add_argument("--output_dir", type=str, default="outputs/{}", help="Directory for training output files (e.g. for TensorBoard)")
+    parser.add_argument("--checkpoint_dir", type=str, default="checkpoints/{}", help="Directory for training weights (e.g. for TensorBoard)")
+    parser.add_argument("--seed", type=int, default=-1, help="Makes results reproducable. Set -1 to disable.")
+    args = parser.parse_args()
+    args.data = args.data.format(cmt, f'{args.cmt}_seed{args.dataseed}')
+    args.logdir = args.logdir.format(cmt)
+    args.output_dir = args.output_dir.format(cmt)
+    args.checkpoint_dir = args.checkpoint_dir.format(cmt)
+
+    
+    print(f"Command line arguments: {args}")
+
+    run(args)

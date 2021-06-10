@@ -1,0 +1,4 @@
+test=data_wdt/xilin_wdt/xilin_wdt_img_test.txt
+test_label=data_wdt/xilin_wdt/xilin_wdt_lbl_test.txt
+classes=1
+names=data_wdt/wdt.names

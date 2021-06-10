@@ -385,3 +385,71 @@ def print_environment_info():
         print(f"Current Commit Hash: {subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD'], stderr=subprocess.DEVNULL).decode('ascii').strip()}")
     except (subprocess.CalledProcessError, FileNotFoundError):
         print("No git or repo found")
+
+
+
+def kmean_anchors(img_path='../coco/train2017.txt', lbl_path='', n=9, img_size=(608, 608)):
+    # from utils.utils import *; _ = kmean_anchors()
+    # Produces a list of target kmeans suitable for use in *.cfg files
+    from utils.datasets_xview import LoadImagesAndLabels
+    thr = 0.20  # IoU threshold
+
+    def print_results(thr, wh, k):
+        k = k[np.argsort(k.prod(1))]  # sort small to large
+        iou = wh_iou(torch.Tensor(wh), torch.Tensor(k))
+        max_iou, min_iou = iou.max(1)[0], iou.min(1)[0]
+        bpr, aat = (max_iou > thr).float().mean(), (iou > thr).float().mean() * n  # best possible recall, anch > thr
+        print('%.2f iou_thr: %.3f best possible recall, %.2f anchors > thr' % (thr, bpr, aat))
+        print('kmeans anchors (n=%g, img_size=%s, IoU=%.3f/%.3f/%.3f-min/mean/best): ' %
+              (n, img_size, min_iou.mean(), iou.mean(), max_iou.mean()), end='')
+        for i, x in enumerate(k):
+            print('%i,%i' % (round(x[0]), round(x[1])), end=',  ' if i < len(k) - 1 else '\n')  # use in *.cfg
+        return k
+
+    def fitness(thr, wh, k):  # mutation fitness
+        iou = wh_iou(wh, torch.Tensor(k)).max(1)[0]  # max iou
+        bpr = (iou > thr).float().mean()  # best possible recall
+        return iou.mean() * 0.80 + bpr * 0.20  # weighted combination
+
+    # Get label wh
+    wh = []
+    dataset = LoadImagesAndLabels(img_path, lbl_path, augment=True, rect=True, cache_labels=True)
+    nr = 1 if img_size[0] == img_size[1] else 10  # number augmentation repetitions
+    for s, l in zip(dataset.shapes, dataset.labels):
+        wh.append(l[:, 3:5] * (s / s.max()))  # image normalized to letterbox normalized wh
+    wh = np.concatenate(wh, 0).repeat(nr, axis=0)  # augment 10x
+    wh *= np.random.uniform(img_size[0], img_size[1], size=(wh.shape[0], 1))  # normalized to pixels (multi-scale)
+
+    # Darknet yolov3.cfg anchors
+    if n == 9:
+        k = np.array([[10, 13], [16, 30], [33, 23], [30, 61], [62, 45], [59, 119], [116, 90], [156, 198], [373, 326]])
+        k = print_results(thr, wh, k)
+    else:
+        # Kmeans calculation
+        from scipy.cluster.vq import kmeans
+        print('Running kmeans on %g points...' % len(wh))
+        s = wh.std(0)  # sigmas for whitening
+        k, dist = kmeans(wh / s, n, iter=20)  # points, mean distance
+        k *= s
+        k = print_results(thr, wh, k)
+
+    # # Plot
+    # k, d = [None] * 20, [None] * 20
+    # for i in tqdm(range(1, 21)):
+    #     k[i-1], d[i-1] = kmeans(wh / s, i)  # points, mean distance
+    # fig, ax = plt.subplots(1, 2, figsize=(14, 7))
+    # ax = ax.ravel()
+    # ax[0].plot(np.arange(1, 21), np.array(d) ** 2, marker='.')
+
+    # Evolve
+    wh = torch.Tensor(wh)
+    f, ng = fitness(thr, wh, k), 1000  # fitness, generations
+    for _ in tqdm(range(ng), desc='Evolving anchors'):
+        kg = (k.copy() * (1 + np.random.random() * np.random.randn(*k.shape) * 0.20)).clip(min=2.0)
+        fg = fitness(thr, wh, kg)
+        if fg > f:
+            f, k = fg, kg.copy()
+            print(fg, list(k.round().reshape(-1)))
+    k = print_results(thr, wh, k)
+
+    return k

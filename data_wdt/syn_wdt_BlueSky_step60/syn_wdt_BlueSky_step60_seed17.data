@@ -1,0 +1,9 @@
+train=data_wdt/syn_wdt_BlueSky_step60/syn_wdt_BlueSky_step60_train_img_seed17.txt
+train_label=data_wdt/syn_wdt_BlueSky_step60/syn_wdt_BlueSky_step60_train_lbl_seed17.txt
+syn_wnd_number=1215
+classes=1
+valid=data_wdt/syn_wdt_BlueSky_step60/syn_wdt_BlueSky_step60_val_img_seed17.txt
+valid_label=data_wdt/syn_wdt_BlueSky_step60/syn_wdt_BlueSky_step60_val_lbl_seed17.txt
+names=data_wdt/wdt.names
+eval=syn_wdt_BlueSky_step60
+backup=backup/
