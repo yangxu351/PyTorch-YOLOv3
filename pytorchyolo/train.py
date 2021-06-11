@@ -3,9 +3,11 @@
 from __future__ import division
 
 import os
+os.environ['CUDA_VISIBLE_DEVICES'] = "2"
+import sys
+sys.path.append('.')
 import argparse
 import tqdm
-export CUDA_VISIBLE_DEVICES='0'
 
 import torch
 from torch.utils.data import DataLoader
@@ -26,7 +28,7 @@ from terminaltables import AsciiTable
 from torchsummary import summary
 
 
-def _create_data_loader(img_path, batch_size, img_size, n_cpu, multiscale_training=False):
+def _create_data_loader(img_path, lbl_path, batch_size, img_size, n_cpu, multiscale_training=False):
     """Creates a DataLoader for training.
 
     :param img_path: Path to file containing all paths to training images.
@@ -43,7 +45,7 @@ def _create_data_loader(img_path, batch_size, img_size, n_cpu, multiscale_traini
     :rtype: DataLoader
     """
     dataset = ListDataset(
-        img_path,
+        img_path, lbl_path,
         img_size=img_size,
         multiscale=multiscale_training,
         transform=AUGMENTATION_TRANSFORMS)
@@ -73,6 +75,8 @@ def run(args):
     data_config = parse_data_config(args.data)
     train_path = data_config["train"]
     valid_path = data_config["valid"]
+    train_lbl_path = data_config["train_label"]
+    valid_lbl_path = data_config["valid_label"]
     class_names = load_classes(data_config["names"])
     # os.environ['CUDA_VISIBLE_DEVICES'] = device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -95,7 +99,7 @@ def run(args):
 
     # Load training dataloader
     dataloader = _create_data_loader(
-        train_path,
+        train_path, train_lbl_path,
         mini_batch_size,
         model.hyperparams['height'],
         args.n_cpu,
@@ -103,7 +107,7 @@ def run(args):
 
     # Load validation dataloader
     validation_dataloader = _create_validation_data_loader(
-        valid_path,
+        valid_path, valid_lbl_path,
         mini_batch_size,
         model.hyperparams['height'],
         args.n_cpu)
@@ -203,7 +207,7 @@ def run(args):
         # #############
 
         # Save model to checkpoint file
-        if epoch % args.checkpoint_interval == 0:
+        if epoch % args.checkpoint_interval == 0 or epoch==args.epochs-1:
             checkpoint_path = f"{args.checkpoint_dir}/yolov3_ckpt_{epoch}.pth"
             print(f"---- Saving checkpoint to: '{checkpoint_path}' ----")
             torch.save(model.state_dict(), checkpoint_path)
@@ -258,10 +262,10 @@ if __name__ == "__main__":
     parser.add_argument("--checkpoint_dir", type=str, default="checkpoints/{}", help="Directory for training weights (e.g. for TensorBoard)")
     parser.add_argument("--seed", type=int, default=-1, help="Makes results reproducable. Set -1 to disable.")
     args = parser.parse_args()
-    args.data = args.data.format(cmt, f'{args.cmt}_seed{args.dataseed}')
-    args.logdir = args.logdir.format(cmt)
-    args.output_dir = args.output_dir.format(cmt)
-    args.checkpoint_dir = args.checkpoint_dir.format(cmt)
+    args.data = args.data.format(args.cmt, f'{args.cmt}_seed{args.dataseed}')
+    args.logdir = args.logdir.format(args.cmt)
+    args.output_dir = args.output_dir.format(args.cmt)
+    args.checkpoint_dir = args.checkpoint_dir.format(args.cmt)
 
     
     print(f"Command line arguments: {args}")

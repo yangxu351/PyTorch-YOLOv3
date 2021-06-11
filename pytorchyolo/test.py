@@ -133,7 +133,7 @@ def _evaluate(model, dataloader, class_names, img_size, iou_thres, conf_thres, n
     return metrics_output
 
 
-def _create_validation_data_loader(img_path, batch_size, img_size, n_cpu):
+def _create_validation_data_loader(img_path, lbl_path, batch_size, img_size, n_cpu):
     """
     Creates a DataLoader for validation.
 
@@ -148,7 +148,7 @@ def _create_validation_data_loader(img_path, batch_size, img_size, n_cpu):
     :return: Returns DataLoader
     :rtype: DataLoader
     """
-    dataset = ListDataset(img_path, img_size=img_size, multiscale=False, transform=DEFAULT_TRANSFORMS)
+    dataset = ListDataset(img_path, lbl_path, img_size=img_size, multiscale=False, transform=DEFAULT_TRANSFORMS)
     dataloader = DataLoader(
         dataset,
         batch_size=batch_size,
